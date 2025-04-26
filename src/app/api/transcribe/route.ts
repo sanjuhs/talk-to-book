@@ -1,18 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
-// Initialize the OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function POST(req: NextRequest) {
   try {
-    const { image, prompt } = await req.json();
+    const { image, prompt, apiKey } = await req.json();
+    
+    // Initialize the OpenAI client with the provided API key or the default one
+    const openai = new OpenAI({
+      apiKey: apiKey || process.env.OPENAI_API_KEY,
+    });
 
     if (!image) {
       return NextResponse.json(
         { error: "Image data is required" },
+        { status: 400 }
+      );
+    }
+    
+    // Check if API key is available
+    if (!apiKey && !process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: "No API key provided. Please provide a custom API key or set the OPENAI_API_KEY environment variable." },
         { status: 400 }
       );
     }
@@ -56,10 +64,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       transcription: response.choices[0].message.content,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("OpenAI API error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to transcribe image";
     return NextResponse.json(
-      { error: error.message || "Failed to transcribe image" },
+      { error: errorMessage },
       { status: 500 }
     );
   }
