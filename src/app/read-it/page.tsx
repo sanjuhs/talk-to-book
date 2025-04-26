@@ -18,12 +18,17 @@ export default function ReadIt() {
     "single"
   );
   const [scaleMode, setScaleMode] = useState<
-    "width" | "height" | "both" | "none"
+    "width" | "height" | "both" | "none" | "custom"
   >("width");
+  const [customScale, setCustomScale] = useState<number>(1.0);
   const [showProgressBar, setShowProgressBar] = useState(true);
   const [pageContext, setPageContext] = useState(2);
   const [parseMethod, setParseMethod] = useState<"gpt" | "direct">("direct");
   const [isTalking, setIsTalking] = useState(false);
+  const [showNotesPanel, setShowNotesPanel] = useState(false);
+  const [isNotesPanelMinimized, setIsNotesPanelMinimized] = useState(false);
+  const [notes, setNotes] = useState<string>("");
+  const [showTalkButton, setShowTalkButton] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
 
@@ -120,6 +125,8 @@ export default function ReadIt() {
         return Math.min(containerWidth / 800, containerHeight / 1100);
       case "none":
         return 1;
+      case "custom":
+        return customScale;
       default:
         return 1;
     }
@@ -367,9 +374,75 @@ export default function ReadIt() {
           )}
         </div>
 
+        {/* Notes Panel */}
+        {showNotesPanel && (
+          <div
+            className={`w-80 bg-gray-800 border-l border-gray-700 overflow-y-auto fixed right-80 top-[3.5rem] bottom-0 transition-all duration-300 z-50 ${
+              isSidebarOpen ? "translate-x-0" : "translate-x-full"
+            } ${
+              isNotesPanelMinimized ? "h-12 overflow-hidden" : ""
+            }`}
+          >
+            <div className="p-4">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-white">Notes</h2>
+                <div className="flex space-x-2">
+                  <button 
+                    onClick={() => setIsNotesPanelMinimized(!isNotesPanelMinimized)}
+                    className="text-gray-400 hover:text-white"
+                    title={isNotesPanelMinimized ? "Expand" : "Minimize"}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      {isNotesPanelMinimized ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      ) : (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      )}
+                    </svg>
+                  </button>
+                  <button 
+                    onClick={() => setShowNotesPanel(false)}
+                    className="text-gray-400 hover:text-white"
+                    title="Close"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              
+              {!isNotesPanelMinimized && (
+                <>
+                  <div className="bg-gray-700 rounded-lg p-3 mb-4">
+                    <textarea
+                      className="w-full h-96 bg-gray-700 text-white resize-none outline-none"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Notes will appear here as you interact with the document..."
+                    />
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <button 
+                      className="px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm"
+                      onClick={() => {
+                        // In the future, this could trigger an API call to save notes
+                        alert("Notes saved!");
+                      }}
+                    >
+                      Save Notes
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+        
         {/* Sidebar */}
         <div
-          className={`w-80 bg-gray-800 border-l border-gray-700 overflow-y-auto fixed right-0 top-[3.5rem] bottom-0 transition-transform duration-300 ${
+          className={`w-80 bg-gray-800 border-l border-gray-700 overflow-y-auto fixed right-0 top-[3.5rem] bottom-0 transition-transform duration-300 z-50 ${
             isSidebarOpen ? "translate-x-0" : "translate-x-full"
           }`}
         >
@@ -478,7 +551,7 @@ export default function ReadIt() {
               {/* Scale Settings */}
               <div>
                 <h3 className="text-white font-medium mb-2">Scale</h3>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 mb-3">
                   <button
                     className={`px-3 py-1.5 rounded text-sm ${
                       scaleMode === "width"
@@ -519,6 +592,50 @@ export default function ReadIt() {
                   >
                     No Limit
                   </button>
+                </div>
+                
+                {/* Zoom Slider */}
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-white text-sm font-medium">Custom Zoom</h4>
+                    <span className="text-gray-300 text-xs">{Math.round(customScale * 100)}%</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button 
+                      className="p-1 bg-gray-700 text-white rounded hover:bg-gray-600 focus:outline-none"
+                      onClick={() => {
+                        setCustomScale(Math.max(0.1, customScale - 0.1));
+                        setScaleMode("custom");
+                      }}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                      </svg>
+                    </button>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="3"
+                      step="0.1"
+                      value={customScale}
+                      onChange={(e) => {
+                        setCustomScale(parseFloat(e.target.value));
+                        setScaleMode("custom");
+                      }}
+                      className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                    <button 
+                      className="p-1 bg-gray-700 text-white rounded hover:bg-gray-600 focus:outline-none"
+                      onClick={() => {
+                        setCustomScale(Math.min(3, customScale + 0.1));
+                        setScaleMode("custom");
+                      }}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -584,6 +701,25 @@ export default function ReadIt() {
                 </ul>
               </div>
 
+              {/* Notes Toggle */}
+              <div className="mt-6 border-t border-gray-700 pt-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-white font-medium">Notes Panel</h3>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={showNotesPanel}
+                      onChange={() => setShowNotesPanel(!showNotesPanel)}
+                    />
+                    <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+                <p className="text-gray-500 text-xs mt-1">
+                  Show notes panel for this document
+                </p>
+              </div>
+              
               {/* Voice Status */}
               <div className="mt-4">
                 <div className="flex items-center space-x-2">
@@ -605,7 +741,7 @@ export default function ReadIt() {
         {!isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="fixed right-4 top-20 bg-gray-800 text-white p-2 rounded-full shadow-lg"
+            className="fixed right-4 top-20 bg-gray-800 text-white p-2 rounded-full shadow-lg z-50"
           >
             <svg
               className="w-5 h-5"
@@ -621,6 +757,33 @@ export default function ReadIt() {
               />
             </svg>
           </button>
+        )}
+      </div>
+      
+      {/* Floating Talk Button */}
+      <div 
+        className="fixed bottom-6 right-6 z-50"
+        onMouseEnter={() => setShowTalkButton(true)}
+        onMouseLeave={() => !isTalking && setShowTalkButton(false)}
+      >
+        <button
+          className={`p-3 rounded-full shadow-lg transition-all duration-300 ${isTalking ? 'bg-green-500 scale-110' : 'bg-indigo-600 hover:bg-indigo-700'} ${showTalkButton || isTalking ? 'opacity-100' : 'opacity-20'}`}
+          onClick={() => setIsTalking(!isTalking)}
+        >
+          {isTalking ? (
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          ) : (
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+          )}
+        </button>
+        {showTalkButton && (
+          <span className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-white bg-gray-800 px-2 py-1 rounded text-xs whitespace-nowrap">
+            Press X to talk
+          </span>
         )}
       </div>
     </div>
