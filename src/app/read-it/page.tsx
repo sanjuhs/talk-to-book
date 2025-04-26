@@ -32,10 +32,15 @@ export default function ReadIt() {
   const [showTalkButton, setShowTalkButton] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcriptionProgress, setTranscriptionProgress] = useState(0);
-  const [transcriptionResults, setTranscriptionResults] = useState<{[key: number]: string}>({});
+  const [transcriptionResults, setTranscriptionResults] = useState<{
+    [key: number]: string;
+  }>({});
   const [isTranscriptionComplete, setIsTranscriptionComplete] = useState(false);
-  const [transcriptionData, setTranscriptionData] = useState<{[key: number]: {content: string}}>({});
-  const [showTranscriptionAccordion, setShowTranscriptionAccordion] = useState(false);
+  const [transcriptionData, setTranscriptionData] = useState<{
+    [key: number]: { content: string };
+  }>({});
+  const [showTranscriptionAccordion, setShowTranscriptionAccordion] =
+    useState(false);
   const [transcriptionContent, setTranscriptionContent] = useState<string>("");
   const [apiKey, setApiKey] = useState<string>("");
   const [useCustomApiKey, setUseCustomApiKey] = useState<boolean>(false);
@@ -51,8 +56,10 @@ export default function ReadIt() {
       // Voice and memory shortcuts
       if (e.key.toLowerCase() === "x" || e.key.toLowerCase() === "t") {
         setIsTalking(true);
+        setIsTalkingActive(true);
       } else if (e.key.toLowerCase() === "z" || e.key === "Escape") {
         setIsTalking(false);
+        setIsTalkingActive(false);
       } else if (e.key.toLowerCase() === "m") {
         // Handle memory dictation
         console.log("Memory dictation activated");
@@ -114,7 +121,7 @@ export default function ReadIt() {
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
     setIsLoading(false);
-    
+
     // If GPT parsing is enabled, start transcription when document loads
     if (parseMethod === "gpt" && file) {
       startGptParsing(numPages);
@@ -125,18 +132,21 @@ export default function ReadIt() {
     setIsLoading(false);
     alert("Error loading PDF file. Please try again.");
   }
-  
+
   // Function to download transcription in different formats
   const downloadTranscription = (format: "txt" | "md" | "json") => {
-    if (Object.keys(transcriptionResults).length === 0 && Object.keys(transcriptionData).length === 0) {
+    if (
+      Object.keys(transcriptionResults).length === 0 &&
+      Object.keys(transcriptionData).length === 0
+    ) {
       alert("No transcription data available to download.");
       return;
     }
-    
+
     let content = "";
     let filename = `${file?.name.replace(".pdf", "") || "transcription"}`;
     let mimeType = "";
-    
+
     if (format === "json") {
       // Format as JSON
       content = JSON.stringify(transcriptionData, null, 2);
@@ -147,7 +157,7 @@ export default function ReadIt() {
       content = Object.entries(transcriptionResults)
         .sort(([aKey], [bKey]) => parseInt(aKey) - parseInt(bKey))
         .map(([, text]) => text)
-        .join('\n\n---\n\n');
+        .join("\n\n---\n\n");
       filename += ".md";
       mimeType = "text/markdown";
     } else {
@@ -155,11 +165,11 @@ export default function ReadIt() {
       content = Object.entries(transcriptionData)
         .sort(([aKey], [bKey]) => parseInt(aKey) - parseInt(bKey))
         .map(([key, data]) => `--- Page ${key} ---\n\n${data.content}`)
-        .join('\n\n');
+        .join("\n\n");
       filename += ".txt";
       mimeType = "text/plain";
     }
-    
+
     // Create a blob and download it
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
@@ -171,11 +181,11 @@ export default function ReadIt() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
-  
+
   // Function to extract text directly from PDF using PDFjs
   async function extractPdfText(totalPages: number) {
     if (!file || !totalPages) return;
-    
+
     setIsTranscribing(true);
     setTranscriptionProgress(0);
     setTranscriptionResults({});
@@ -183,117 +193,134 @@ export default function ReadIt() {
     setIsTranscriptionComplete(false);
     setTranscriptionContent("Starting direct PDF text extraction...");
     setShowTranscriptionAccordion(true);
-    
+
     try {
       // Load the PDF document
       const loadingTask = pdfjs.getDocument(URL.createObjectURL(file));
       const pdf = await loadingTask.promise;
-      
+
       // Process pages in parallel batches
       const batchSize = 10; // Process 10 pages at a time for direct extraction
       const batches = Math.ceil(totalPages / batchSize);
-      
+
       for (let batchIndex = 0; batchIndex < batches; batchIndex++) {
         const startPage = batchIndex * batchSize + 1;
         const endPage = Math.min(startPage + batchSize - 1, totalPages);
-        
+
         // Create an array of promises for this batch
         const batchPromises = [];
-        
+
         for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
           batchPromises.push(extractPageText(pdf, pageNum));
         }
-        
+
         // Wait for all pages in this batch to be processed
         await Promise.all(batchPromises);
-        
+
         // Update progress
-        setTranscriptionProgress(endPage / totalPages * 100);
-        
+        setTranscriptionProgress((endPage / totalPages) * 100);
+
         // Update transcription content with progress
-        setTranscriptionContent(prevContent => {
-          const progressUpdate = `Extraction progress: ${Math.round(endPage / totalPages * 100)}% (${endPage}/${totalPages} pages)`;
-          return prevContent.includes("Extraction progress:") 
+        setTranscriptionContent((prevContent) => {
+          const progressUpdate = `Extraction progress: ${Math.round(
+            (endPage / totalPages) * 100
+          )}% (${endPage}/${totalPages} pages)`;
+          return prevContent.includes("Extraction progress:")
             ? prevContent.replace(/Extraction progress:.*/, progressUpdate)
             : `${progressUpdate}\n\n${prevContent}`;
         });
       }
-      
+
       // Compile all extraction results
       const compiledText = Object.entries(transcriptionResults)
         .sort(([aKey], [bKey]) => parseInt(aKey) - parseInt(bKey))
         .map(([, text]) => text)
-        .join('\n\n---\n\n');
-      
-      setTranscriptionContent(prevContent => {
-        return prevContent.replace(/Extraction progress:.*/, '') + 
-          '\n\n✅ Text extraction complete! Here is the full text:\n\n' + compiledText;
+        .join("\n\n---\n\n");
+
+      setTranscriptionContent((prevContent) => {
+        return (
+          prevContent.replace(/Extraction progress:.*/, "") +
+          "\n\n✅ Text extraction complete! Here is the full text:\n\n" +
+          compiledText
+        );
       });
-      
+
       // Show notes panel with transcription accordion
       if (!showNotesPanel) {
         setShowNotesPanel(true);
       }
-      
+
       setIsTranscriptionComplete(true);
     } catch (error) {
-      console.error('Error extracting PDF text:', error);
-      setTranscriptionContent(prevContent => prevContent + `\n\nError extracting PDF text: ${error instanceof Error ? error.message : String(error)}`);
+      console.error("Error extracting PDF text:", error);
+      setTranscriptionContent(
+        (prevContent) =>
+          prevContent +
+          `\n\nError extracting PDF text: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+      );
     } finally {
       setIsTranscribing(false);
     }
   }
-  
+
   // Extract text from a single page using PDFjs
   async function extractPageText(pdf: pdfjs.PDFDocumentProxy, pageNum: number) {
     try {
       // Get the page
       const page = await pdf.getPage(pageNum);
-      
+
       // Extract text content
       const textContent = await page.getTextContent();
-      
+
       // Combine the text items into a single string
       let pageText = textContent.items
-        .map(item => 'str' in item ? item.str : '')
-        .join(' ');
-      
+        .map((item) => ("str" in item ? item.str : ""))
+        .join(" ");
+
       // Format the text (basic cleanup)
-      pageText = pageText.replace(/\s+/g, ' ').trim();
-      
+      pageText = pageText.replace(/\s+/g, " ").trim();
+
       // Store the extraction result
-      setTranscriptionResults(prev => ({
+      setTranscriptionResults((prev) => ({
         ...prev,
         [pageNum]: `## Page ${pageNum}\n\n${pageText}`,
       }));
-      
+
       // Store structured data
-      setTranscriptionData(prev => ({
+      setTranscriptionData((prev) => ({
         ...prev,
         [pageNum]: { content: pageText },
       }));
-      
+
       return pageText;
     } catch (error) {
       console.error(`Error extracting text from page ${pageNum}:`, error);
-      setTranscriptionResults(prev => ({
+      setTranscriptionResults((prev) => ({
         ...prev,
-        [pageNum]: `## Page ${pageNum}\n\n*Error extracting text from this page: ${error instanceof Error ? error.message : String(error)}*`,
+        [pageNum]: `## Page ${pageNum}\n\n*Error extracting text from this page: ${
+          error instanceof Error ? error.message : String(error)
+        }*`,
       }));
-      
-      setTranscriptionData(prev => ({
+
+      setTranscriptionData((prev) => ({
         ...prev,
-        [pageNum]: { content: `Error extracting text: ${error instanceof Error ? error.message : String(error)}` },
+        [pageNum]: {
+          content: `Error extracting text: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        },
       }));
-      
+
       return null;
     }
   }
-  
+
   // Function to start GPT parsing of PDF pages
   async function startGptParsing(totalPages: number) {
     if (!file || !totalPages) return;
-    
+
     setIsTranscribing(true);
     setTranscriptionProgress(0);
     setTranscriptionResults({});
@@ -301,97 +328,108 @@ export default function ReadIt() {
     setIsTranscriptionComplete(false);
     setTranscriptionContent("Starting PDF transcription with GPT...");
     setShowTranscriptionAccordion(true);
-    
+
     try {
       // Process pages in parallel batches
       const batchSize = 5; // Process 5 pages at a time
       const batches = Math.ceil(totalPages / batchSize);
-      
+
       for (let batchIndex = 0; batchIndex < batches; batchIndex++) {
         const startPage = batchIndex * batchSize + 1;
         const endPage = Math.min(startPage + batchSize - 1, totalPages);
-        
+
         // Create an array of promises for this batch
         const batchPromises = [];
-        
+
         for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
           batchPromises.push(processPage(pageNum));
         }
-        
+
         // Wait for all pages in this batch to be processed
         await Promise.all(batchPromises);
-        
+
         // Update progress
-        setTranscriptionProgress(endPage / totalPages * 100);
-        
+        setTranscriptionProgress((endPage / totalPages) * 100);
+
         // Update transcription content with progress
-        setTranscriptionContent(prevContent => {
-          const progressUpdate = `Transcription progress: ${Math.round(endPage / totalPages * 100)}% (${endPage}/${totalPages} pages)`;
-          return prevContent.includes("Transcription progress:") 
+        setTranscriptionContent((prevContent) => {
+          const progressUpdate = `Transcription progress: ${Math.round(
+            (endPage / totalPages) * 100
+          )}% (${endPage}/${totalPages} pages)`;
+          return prevContent.includes("Transcription progress:")
             ? prevContent.replace(/Transcription progress:.*/, progressUpdate)
             : `${progressUpdate}\n\n${prevContent}`;
         });
       }
-      
+
       // Compile all transcription results
       const compiledText = Object.entries(transcriptionResults)
         .sort(([aKey], [bKey]) => parseInt(aKey) - parseInt(bKey))
         .map(([, text]) => text)
-        .join('\n\n---\n\n');
-      
-      setTranscriptionContent(prevContent => {
-        return prevContent.replace(/Transcription progress:.*/, '') + 
-          '\n\n✅ Transcription complete! Here is the full text:\n\n' + compiledText;
+        .join("\n\n---\n\n");
+
+      setTranscriptionContent((prevContent) => {
+        return (
+          prevContent.replace(/Transcription progress:.*/, "") +
+          "\n\n✅ Transcription complete! Here is the full text:\n\n" +
+          compiledText
+        );
       });
-      
+
       // Show notes panel with transcription accordion
       if (!showNotesPanel) {
         setShowNotesPanel(true);
       }
-      
+
       setIsTranscriptionComplete(true);
     } catch (error) {
-      console.error('Error processing PDF:', error);
-      setTranscriptionContent(prevContent => prevContent + `\n\nError processing PDF: ${error instanceof Error ? error.message : String(error)}`);
+      console.error("Error processing PDF:", error);
+      setTranscriptionContent(
+        (prevContent) =>
+          prevContent +
+          `\n\nError processing PDF: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+      );
     } finally {
       setIsTranscribing(false);
     }
   }
-  
+
   // Process a single page with GPT
   async function processPage(pageNum: number) {
     try {
       // Create a new canvas for this page to avoid reuse errors
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+
       if (!context) {
         throw new Error("Could not create canvas context");
       }
-      
+
       // Load the PDF document for this specific page
       const loadingTask = pdfjs.getDocument(URL.createObjectURL(file!));
       const pdf = await loadingTask.promise;
-      
+
       // Get the page
       const page = await pdf.getPage(pageNum);
-      
+
       // Set canvas dimensions to match page size
       const viewport = page.getViewport({ scale: 1.5 }); // Higher scale for better quality
       canvas.height = viewport.height;
       canvas.width = viewport.width;
-      
+
       // Render the page to canvas
       await page.render({ canvasContext: context, viewport }).promise;
-      
+
       // Convert canvas to base64 image
-      const imageData = canvas.toDataURL('image/png');
-      
+      const imageData = canvas.toDataURL("image/png");
+
       // Send to transcription API
-      const response = await fetch('/api/transcribe', {
-        method: 'POST',
+      const response = await fetch("/api/transcribe", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           image: imageData,
@@ -399,38 +437,44 @@ export default function ReadIt() {
           apiKey: useCustomApiKey ? apiKey : undefined,
         }),
       });
-      
+
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
-      
+
       const result = await response.json();
-      
+
       // Store the transcription result
-      setTranscriptionResults(prev => ({
+      setTranscriptionResults((prev) => ({
         ...prev,
         [pageNum]: `## Page ${pageNum}\n\n${result.transcription}`,
       }));
-      
+
       // Store structured data
-      setTranscriptionData(prev => ({
+      setTranscriptionData((prev) => ({
         ...prev,
         [pageNum]: { content: result.transcription },
       }));
-      
+
       return result.transcription;
     } catch (error) {
       console.error(`Error processing page ${pageNum}:`, error);
-      setTranscriptionResults(prev => ({
+      setTranscriptionResults((prev) => ({
         ...prev,
-        [pageNum]: `## Page ${pageNum}\n\n*Error transcribing this page: ${error instanceof Error ? error.message : String(error)}*`,
+        [pageNum]: `## Page ${pageNum}\n\n*Error transcribing this page: ${
+          error instanceof Error ? error.message : String(error)
+        }*`,
       }));
-      
-      setTranscriptionData(prev => ({
+
+      setTranscriptionData((prev) => ({
         ...prev,
-        [pageNum]: { content: `Error transcribing page: ${error instanceof Error ? error.message : String(error)}` },
+        [pageNum]: {
+          content: `Error transcribing page: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        },
       }));
-      
+
       return null;
     }
   }
@@ -716,44 +760,71 @@ export default function ReadIt() {
           <div
             className={`w-80 bg-gray-800 border-l border-gray-700 overflow-y-auto fixed right-80 top-[3.5rem] bottom-0 transition-all duration-300 z-50 ${
               isSidebarOpen ? "translate-x-0" : "translate-x-full"
-            } ${
-              isNotesPanelMinimized ? "h-12 overflow-hidden" : ""
-            }`}
+            } ${isNotesPanelMinimized ? "h-12 overflow-hidden" : ""}`}
           >
             <div className="p-4">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-white">Notes</h2>
                 <div className="flex space-x-2">
-                  <button 
-                    onClick={() => setIsNotesPanelMinimized(!isNotesPanelMinimized)}
+                  <button
+                    onClick={() =>
+                      setIsNotesPanelMinimized(!isNotesPanelMinimized)
+                    }
                     className="text-gray-400 hover:text-white"
                     title={isNotesPanelMinimized ? "Expand" : "Minimize"}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       {isNotesPanelMinimized ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 15l7-7 7 7"
+                        />
                       ) : (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 9l-7 7-7-7"
+                        />
                       )}
                     </svg>
                   </button>
-                  <button 
+                  <button
                     onClick={() => setShowNotesPanel(false)}
                     className="text-gray-400 hover:text-white"
                     title="Close"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
                     </svg>
                   </button>
                 </div>
               </div>
-              
+
               {!isNotesPanelMinimized && (
                 <>
                   {/* User Notes Section */}
                   <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-white mb-2">Your Notes</h3>
+                    <h3 className="text-lg font-semibold text-white mb-2">
+                      Your Notes
+                    </h3>
                     <div className="bg-gray-700 rounded-lg p-3">
                       <textarea
                         className="w-full h-48 bg-gray-700 text-white resize-none outline-none"
@@ -762,9 +833,9 @@ export default function ReadIt() {
                         placeholder="Add your notes here..."
                       />
                     </div>
-                    
+
                     <div className="flex justify-end mt-2">
-                      <button 
+                      <button
                         className="px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm"
                         onClick={() => {
                           // In the future, this could trigger an API call to save notes
@@ -775,24 +846,30 @@ export default function ReadIt() {
                       </button>
                     </div>
                   </div>
-                  
+
                   {/* Voice conversation */}
                   {isTalkingActive && (
                     <div className="border-t border-gray-700 mt-4">
                       <div className="p-4 cursor-pointer flex justify-between items-center">
-                        <h3 className="text-lg font-semibold">Voice Conversation</h3>
+                        <h3 className="text-lg font-semibold">
+                          Voice Conversation
+                        </h3>
                       </div>
                       <div className="p-4 border-t border-gray-700">
                         <div className="space-y-4">
                           {voiceTranscript && (
                             <div className="bg-gray-700 p-3 rounded-lg">
-                              <p className="text-sm text-gray-400 mb-1">You said:</p>
+                              <p className="text-sm text-gray-400 mb-1">
+                                You said:
+                              </p>
                               <p className="text-white">{voiceTranscript}</p>
                             </div>
                           )}
                           {voiceResponse && (
                             <div className="bg-blue-900 p-3 rounded-lg">
-                              <p className="text-sm text-blue-300 mb-1">AI response:</p>
+                              <p className="text-sm text-blue-300 mb-1">
+                                AI response:
+                              </p>
                               <p className="text-white">{voiceResponse}</p>
                             </div>
                           )}
@@ -800,50 +877,67 @@ export default function ReadIt() {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Transcription Accordion */}
                   {(isTranscribing || isTranscriptionComplete) && (
                     <div className="mt-6">
-                      <div 
+                      <div
                         className="flex justify-between items-center bg-gray-700 p-3 rounded-t cursor-pointer"
-                        onClick={() => setShowTranscriptionAccordion(!showTranscriptionAccordion)}
+                        onClick={() =>
+                          setShowTranscriptionAccordion(
+                            !showTranscriptionAccordion
+                          )
+                        }
                       >
-                        <h3 className="text-lg font-semibold text-white">Transcription</h3>
-                        <svg 
-                          className={`w-5 h-5 text-gray-400 transform transition-transform ${showTranscriptionAccordion ? 'rotate-180' : ''}`} 
-                          fill="none" 
-                          stroke="currentColor" 
+                        <h3 className="text-lg font-semibold text-white">
+                          Transcription
+                        </h3>
+                        <svg
+                          className={`w-5 h-5 text-gray-400 transform transition-transform ${
+                            showTranscriptionAccordion ? "rotate-180" : ""
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
                           viewBox="0 0 24 24"
                         >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 9l-7 7-7-7"
+                          />
                         </svg>
                       </div>
-                      
+
                       {showTranscriptionAccordion && (
                         <div className="bg-gray-700 rounded-b p-3">
                           {isTranscribing && (
                             <div className="mb-3">
                               <div className="flex justify-between text-xs text-gray-400 mb-1">
                                 <span>Transcribing...</span>
-                                <span>{Math.round(transcriptionProgress)}%</span>
+                                <span>
+                                  {Math.round(transcriptionProgress)}%
+                                </span>
                               </div>
                               <div className="w-full bg-gray-600 rounded-full h-2">
-                                <div 
-                                  className="bg-indigo-600 h-2 rounded-full transition-all duration-300" 
+                                <div
+                                  className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
                                   style={{ width: `${transcriptionProgress}%` }}
                                 ></div>
                               </div>
                             </div>
                           )}
-                          
+
                           <textarea
                             className="w-full h-64 bg-gray-600 text-white p-2 rounded resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono text-sm"
                             value={transcriptionContent}
-                            onChange={(e) => setTranscriptionContent(e.target.value)}
+                            onChange={(e) =>
+                              setTranscriptionContent(e.target.value)
+                            }
                             readOnly={isTranscribing}
                             placeholder="Transcription will appear here..."
                           ></textarea>
-                          
+
                           {isTranscriptionComplete && (
                             <div className="mt-3 grid grid-cols-3 gap-2">
                               <button
@@ -875,7 +969,7 @@ export default function ReadIt() {
             </div>
           </div>
         )}
-        
+
         {/* Sidebar */}
         <div
           className={`w-80 bg-gray-800 border-l border-gray-700 overflow-y-auto fixed right-0 top-[3.5rem] bottom-0 transition-transform duration-300 z-50 ${
@@ -947,7 +1041,7 @@ export default function ReadIt() {
                     ? "Good for PDFs with many images"
                     : "Standard PDF parsing"}
                 </p>
-                
+
                 {/* Transcription Progress */}
                 {isTranscribing && (
                   <div className="mt-2">
@@ -956,22 +1050,24 @@ export default function ReadIt() {
                       <span>{Math.round(transcriptionProgress)}%</span>
                     </div>
                     <div className="w-full bg-gray-700 rounded-full h-2">
-                      <div 
-                        className="bg-indigo-600 h-2 rounded-full transition-all duration-300" 
+                      <div
+                        className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
                         style={{ width: `${transcriptionProgress}%` }}
                       ></div>
                     </div>
                   </div>
                 )}
-                
+
                 {/* API Key Input */}
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-white text-sm font-medium">Custom API Key</h4>
+                    <h4 className="text-white text-sm font-medium">
+                      Custom API Key
+                    </h4>
                     <label className="relative inline-flex items-center cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        className="sr-only peer" 
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
                         checked={useCustomApiKey}
                         onChange={() => setUseCustomApiKey(!useCustomApiKey)}
                         disabled={isTranscribing}
@@ -979,7 +1075,7 @@ export default function ReadIt() {
                       <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
                     </label>
                   </div>
-                  
+
                   {useCustomApiKey && (
                     <div className="mt-2">
                       <input
@@ -991,34 +1087,43 @@ export default function ReadIt() {
                         disabled={isTranscribing}
                       />
                       <p className="text-gray-500 text-xs mt-1">
-                        Your API key is used only for this session and not stored
+                        Your API key is used only for this session and not
+                        stored
                       </p>
                     </div>
                   )}
-                  
+
                   {/* Transcription Buttons */}
-                  {parseMethod === "gpt" && file && numPages && !isTranscribing && (
-                    <button
-                      className="mt-3 w-full px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium transition-colors"
-                      onClick={() => startGptParsing(numPages)}
-                    >
-                      Start GPT Transcription ({numPages} pages)
-                    </button>
-                  )}
-                  
-                  {parseMethod === "direct" && file && numPages && !isTranscribing && (
-                    <button
-                      className="mt-3 w-full px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium transition-colors"
-                      onClick={() => extractPdfText(numPages)}
-                    >
-                      Extract Text Directly ({numPages} pages)
-                    </button>
-                  )}
-                  
+                  {parseMethod === "gpt" &&
+                    file &&
+                    numPages &&
+                    !isTranscribing && (
+                      <button
+                        className="mt-3 w-full px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium transition-colors"
+                        onClick={() => startGptParsing(numPages)}
+                      >
+                        Start GPT Transcription ({numPages} pages)
+                      </button>
+                    )}
+
+                  {parseMethod === "direct" &&
+                    file &&
+                    numPages &&
+                    !isTranscribing && (
+                      <button
+                        className="mt-3 w-full px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium transition-colors"
+                        onClick={() => extractPdfText(numPages)}
+                      >
+                        Extract Text Directly ({numPages} pages)
+                      </button>
+                    )}
+
                   {/* Download Buttons */}
                   {isTranscriptionComplete && (
                     <div className="mt-4 space-y-2">
-                      <h4 className="text-white text-sm font-medium mb-2">Download Transcription</h4>
+                      <h4 className="text-white text-sm font-medium mb-2">
+                        Download Transcription
+                      </h4>
                       <div className="grid grid-cols-3 gap-2">
                         <button
                           className="px-3 py-1.5 bg-gray-700 text-white rounded hover:bg-gray-600 text-xs font-medium transition-colors"
@@ -1126,23 +1231,37 @@ export default function ReadIt() {
                     No Limit
                   </button>
                 </div>
-                
+
                 {/* Zoom Slider */}
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-white text-sm font-medium">Custom Zoom</h4>
-                    <span className="text-gray-300 text-xs">{Math.round(customScale * 100)}%</span>
+                    <h4 className="text-white text-sm font-medium">
+                      Custom Zoom
+                    </h4>
+                    <span className="text-gray-300 text-xs">
+                      {Math.round(customScale * 100)}%
+                    </span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <button 
+                    <button
                       className="p-1 bg-gray-700 text-white rounded hover:bg-gray-600 focus:outline-none"
                       onClick={() => {
                         setCustomScale(Math.max(0.1, customScale - 0.1));
                         setScaleMode("custom");
                       }}
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M20 12H4"
+                        />
                       </svg>
                     </button>
                     <input
@@ -1157,15 +1276,25 @@ export default function ReadIt() {
                       }}
                       className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                     />
-                    <button 
+                    <button
                       className="p-1 bg-gray-700 text-white rounded hover:bg-gray-600 focus:outline-none"
                       onClick={() => {
                         setCustomScale(Math.min(3, customScale + 0.1));
                         setScaleMode("custom");
                       }}
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 4v16m8-8H4"
+                        />
                       </svg>
                     </button>
                   </div>
@@ -1239,9 +1368,9 @@ export default function ReadIt() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-white font-medium">Notes Panel</h3>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
                       checked={showNotesPanel}
                       onChange={() => setShowNotesPanel(!showNotesPanel)}
                     />
@@ -1252,7 +1381,7 @@ export default function ReadIt() {
                   Show notes panel for this document
                 </p>
               </div>
-              
+
               {/* Voice Status */}
               <div className="mt-4">
                 <div className="flex items-center space-x-2">
@@ -1292,24 +1421,48 @@ export default function ReadIt() {
           </button>
         )}
       </div>
-      
+
       {/* Floating Talk Button */}
-      <div 
+      <div
         className="fixed bottom-6 right-6 z-50"
         onMouseEnter={() => setShowTalkButton(true)}
         onMouseLeave={() => !isTalking && setShowTalkButton(false)}
       >
         <button
-          className={`p-3 rounded-full shadow-lg transition-all duration-300 ${isTalking ? 'bg-green-500 scale-110' : 'bg-indigo-600 hover:bg-indigo-700'} ${showTalkButton || isTalking ? 'opacity-100' : 'opacity-20'}`}
+          className={`p-3 rounded-full shadow-lg transition-all duration-300 ${
+            isTalking
+              ? "bg-green-500 scale-110"
+              : "bg-indigo-600 hover:bg-indigo-700"
+          } ${showTalkButton || isTalking ? "opacity-100" : "opacity-20"}`}
           onClick={toggleTalking}
         >
           {isTalking ? (
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+            <svg
+              className="w-6 h-6 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 12h14M12 5l7 7-7 7"
+              />
             </svg>
           ) : (
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            <svg
+              className="w-6 h-6 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+              />
             </svg>
           )}
         </button>
@@ -1332,14 +1485,25 @@ export default function ReadIt() {
         onTranscript={(text) => setVoiceTranscript(text)}
         onResponse={(text) => setVoiceResponse(text)}
         apiKey={useCustomApiKey ? apiKey : undefined}
+        // setIsTalkingActive={setIsTalkingActive}
         pageContext={{
           currentPage: pageNumber,
           totalPages: numPages || 0,
           pageContent: transcriptionData[pageNumber]?.content || "",
           surroundingPagesContent: {
-            ...(pageNumber > 1 ? { [pageNumber - 1]: transcriptionData[pageNumber - 1]?.content || "" } : {}),
-            ...(pageNumber < (numPages || 0) ? { [pageNumber + 1]: transcriptionData[pageNumber + 1]?.content || "" } : {})
-          }
+            ...(pageNumber > 1
+              ? {
+                  [pageNumber - 1]:
+                    transcriptionData[pageNumber - 1]?.content || "",
+                }
+              : {}),
+            ...(pageNumber < (numPages || 0)
+              ? {
+                  [pageNumber + 1]:
+                    transcriptionData[pageNumber + 1]?.content || "",
+                }
+              : {}),
+          },
         }}
       />
     </div>

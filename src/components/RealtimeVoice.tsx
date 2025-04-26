@@ -9,6 +9,7 @@ interface RealtimeVoiceProps {
   onStop: () => void;
   onTranscript: (text: string) => void;
   onResponse: (text: string) => void;
+  // setIsTalkingActive: (isActive: boolean) => void;
   pageContext: {
     currentPage: number;
     totalPages: number;
@@ -132,10 +133,25 @@ export default function RealtimeVoice({
 
       const model = "gpt-4o-mini-realtime-preview-2024-12-17";
 
-      // Send session context
-      const contextText = `You are an AI assistant helping with a PDF document. 
-        The user is currently on page ${pageContext.currentPage} of ${pageContext.totalPages}. 
-        Here is the content of the current page:\n\n${pageContext.pageContent}\n\n`;
+      // Build context text with surrounding pages
+      let contextText = `You are an AI assistant helping with a PDF document.\n`;
+      contextText += `The user is currently on page ${pageContext.currentPage} of ${pageContext.totalPages}.\n\n`;
+      
+      // Add current page content
+      contextText += `Current page content:\n${pageContext.pageContent}\n\n`;
+      
+      // Add surrounding pages if they exist
+      if (pageContext.surroundingPagesContent) {
+        const pages = Object.entries(pageContext.surroundingPagesContent);
+        if (pages.length > 0) {
+          contextText += `Context from surrounding pages:\n`;
+          pages.forEach(([pageNum, content]) => {
+            if (content) {
+              contextText += `\nPage ${pageNum}:\n${content}\n`;
+            }
+          });
+        }
+      }
 
       const sdpRes = await fetch(
         `https://api.openai.com/v1/realtime?model=${model}`,
