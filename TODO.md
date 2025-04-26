@@ -13,3 +13,6 @@ Option to add a chat / temporary chat as in you can tlak to teh Book literally a
 Add MIT liscence to it
 Add a light mode and a dark mode
 LInk the Github repo with the repo
+If you are taking too long on a page then the assistant can wake you up and can basically tell you/ ask you where you are stuck. And we can keep it up.
+
+make it accept epubs, mobi , md, txt, html, pdf as well as urls of certian websites too ?

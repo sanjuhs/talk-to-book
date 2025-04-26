@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
+import RealtimeVoice from "@/components/RealtimeVoice";
 
 // Set up the worker for PDF.js
 pdfjs.GlobalWorkerOptions.workerSrc = `/pdf.worker.min.mjs`;
@@ -37,7 +38,10 @@ export default function ReadIt() {
   const [showTranscriptionAccordion, setShowTranscriptionAccordion] = useState(false);
   const [transcriptionContent, setTranscriptionContent] = useState<string>("");
   const [apiKey, setApiKey] = useState<string>("");
-  const [useCustomApiKey, setUseCustomApiKey] = useState(false);
+  const [useCustomApiKey, setUseCustomApiKey] = useState<boolean>(false);
+  const [isTalkingActive, setIsTalkingActive] = useState<boolean>(false);
+  const [voiceTranscript, setVoiceTranscript] = useState<string>("");
+  const [voiceResponse, setVoiceResponse] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
 
@@ -455,6 +459,16 @@ export default function ReadIt() {
     }
   };
 
+  const toggleTalking = () => {
+    setIsTalking(!isTalking);
+    setIsTalkingActive(!isTalkingActive);
+    if (isTalkingActive) {
+      // Reset voice conversation when stopping
+      setVoiceTranscript("");
+      setVoiceResponse("");
+    }
+  };
+
   return (
     <div
       className="min-h-screen bg-gray-900 flex flex-col h-screen overflow-hidden"
@@ -761,6 +775,31 @@ export default function ReadIt() {
                       </button>
                     </div>
                   </div>
+                  
+                  {/* Voice conversation */}
+                  {isTalkingActive && (
+                    <div className="border-t border-gray-700 mt-4">
+                      <div className="p-4 cursor-pointer flex justify-between items-center">
+                        <h3 className="text-lg font-semibold">Voice Conversation</h3>
+                      </div>
+                      <div className="p-4 border-t border-gray-700">
+                        <div className="space-y-4">
+                          {voiceTranscript && (
+                            <div className="bg-gray-700 p-3 rounded-lg">
+                              <p className="text-sm text-gray-400 mb-1">You said:</p>
+                              <p className="text-white">{voiceTranscript}</p>
+                            </div>
+                          )}
+                          {voiceResponse && (
+                            <div className="bg-blue-900 p-3 rounded-lg">
+                              <p className="text-sm text-blue-300 mb-1">AI response:</p>
+                              <p className="text-white">{voiceResponse}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Transcription Accordion */}
                   {(isTranscribing || isTranscriptionComplete) && (
@@ -1262,7 +1301,7 @@ export default function ReadIt() {
       >
         <button
           className={`p-3 rounded-full shadow-lg transition-all duration-300 ${isTalking ? 'bg-green-500 scale-110' : 'bg-indigo-600 hover:bg-indigo-700'} ${showTalkButton || isTalking ? 'opacity-100' : 'opacity-20'}`}
-          onClick={() => setIsTalking(!isTalking)}
+          onClick={toggleTalking}
         >
           {isTalking ? (
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1280,6 +1319,29 @@ export default function ReadIt() {
           </span>
         )}
       </div>
+
+      {/* RealtimeVoice component */}
+      <RealtimeVoice
+        isActive={isTalkingActive}
+        onStart={() => {
+          console.log("Voice conversation started");
+          setShowNotesPanel(true);
+          setIsNotesPanelMinimized(false);
+        }}
+        onStop={() => console.log("Voice conversation stopped")}
+        onTranscript={(text) => setVoiceTranscript(text)}
+        onResponse={(text) => setVoiceResponse(text)}
+        apiKey={useCustomApiKey ? apiKey : undefined}
+        pageContext={{
+          currentPage: pageNumber,
+          totalPages: numPages || 0,
+          pageContent: transcriptionData[pageNumber]?.content || "",
+          surroundingPagesContent: {
+            ...(pageNumber > 1 ? { [pageNumber - 1]: transcriptionData[pageNumber - 1]?.content || "" } : {}),
+            ...(pageNumber < (numPages || 0) ? { [pageNumber + 1]: transcriptionData[pageNumber + 1]?.content || "" } : {})
+          }
+        }}
+      />
     </div>
   );
 }
