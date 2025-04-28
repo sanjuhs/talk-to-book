@@ -47,6 +47,21 @@ export default function ReadIt() {
   const [isTalkingActive, setIsTalkingActive] = useState<boolean>(false);
   const [voiceTranscript, setVoiceTranscript] = useState<string>("");
   const [voiceResponse, setVoiceResponse] = useState<string>("");
+  const [urlInput, setUrlInput] = useState<string>("");
+  const [htmlContent, setHtmlContent] = useState<string>("");
+  const [isHtmlContent, setIsHtmlContent] = useState<boolean>(false);
+  const [contentSource, setContentSource] = useState<
+    "pdf" | "html" | "url" | null
+  >(null);
+
+  const [sourceUrl, setSourceUrl] = useState<string>("");
+  const [contentTitle, setContentTitle] = useState<string>("");
+  const [contentUrl, setContentUrl] = useState<string>("");
+
+  const [selectedProvider, setSelectedProvider] = useState<
+    "outspeed" | "openai"
+  >("outspeed");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
 
@@ -109,14 +124,33 @@ export default function ReadIt() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [file, numPages, pageNumber, viewMode]);
 
-  function onFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = event.target.files;
-    if (files && files[0]) {
-      setIsLoading(true);
-      setFile(files[0]);
-      setPageNumber(1);
+  // function onFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+  //   const files = event.target.files;
+  //   if (files && files[0]) {
+  //     setIsLoading(true);
+  //     setFile(files[0]);
+  //     setPageNumber(1);
+  //   }
+  // }
+
+  const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset state
+    setTranscriptionData({});
+    setIsTranscriptionComplete(false);
+
+    // Handle different file types
+    if (file.type === "application/pdf") {
+      setFile(file);
+    } else if (file.type === "text/html") {
+      processHtmlFile(file);
+    } else {
+      alert("Unsupported file type. Please upload a PDF or HTML file.");
+      return;
     }
-  }
+  };
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
@@ -316,6 +350,87 @@ export default function ReadIt() {
       return null;
     }
   }
+
+  // Function to process HTML file
+  const processHtmlFile = (file: File) => {
+    setIsLoading(true);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        const html = e.target.result as string;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+
+        // Extract text content
+        const title = doc.title || "HTML Document";
+        const bodyText = doc.body.textContent || "";
+
+        // Store the extracted content in the transcription data
+        setTranscriptionData({
+          1: { content: bodyText },
+        });
+
+        // Store HTML content for display
+        setHtmlContent(html);
+        setIsHtmlContent(true);
+        setContentTitle(title);
+        setContentSource("html");
+
+        setNumPages(1);
+        setPageNumber(1);
+        setIsTranscribing(false);
+        setIsTranscriptionComplete(true);
+        setFile(file);
+      }
+    };
+
+    reader.onerror = () => {
+      console.error("Error reading HTML file");
+      setIsLoading(false);
+    };
+
+    reader.readAsText(file);
+  };
+
+  const handleUrlScrape = async (url: string) => {
+    try {
+      setIsLoading(true);
+
+      const response = await fetch("/api/scrape", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to scrape URL: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Store the scraped content in the transcription data
+      setTranscriptionData({
+        1: { content: data.content },
+      });
+
+      // Store the HTML content for iframe display
+      setHtmlContent(data.html);
+      setIsHtmlContent(true);
+      setContentTitle(data.title || "Web Content");
+      setContentUrl(data.url);
+      setSourceUrl(data.url);
+      setContentSource("url");
+      setFile(null); // No file, just URL content
+    } catch (error) {
+      console.error("Error scraping URL:", error);
+      alert("Error scraping URL. Please check the URL and try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Function to start GPT parsing of PDF pages
   async function startGptParsing(totalPages: number) {
@@ -525,7 +640,11 @@ export default function ReadIt() {
         </div>
 
         <div className="flex items-center space-x-4">
-          {file && <span className="text-gray-300 text-sm">{file.name}</span>}
+          {file && (
+            <span className="text-gray-300 text-sm">
+              {file.name} || {contentTitle} || {sourceUrl}
+            </span>
+          )}
           {!file && (
             <label className="px-4 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 cursor-pointer">
               Upload PDF
@@ -549,7 +668,7 @@ export default function ReadIt() {
             isSidebarOpen ? "mr-80" : ""
           }`}
         >
-          {!file && (
+          {!file && !isHtmlContent && (
             <div className="h-full flex flex-col items-center justify-center">
               <div className="max-w-md text-center p-8 bg-gray-800 rounded-xl shadow-lg">
                 <svg
@@ -566,21 +685,81 @@ export default function ReadIt() {
                   />
                 </svg>
                 <h2 className="text-2xl font-bold text-white mb-2">
-                  No PDF Loaded
+                  No Content Loaded
                 </h2>
                 <p className="text-gray-400 mb-6">
-                  Upload a PDF to start reading and analyzing its content
+                  Upload a PDF or HTML file, or enter a URL to start reading and
+                  analyzing content
                 </p>
-                <label className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 cursor-pointer inline-block">
-                  Select PDF File
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    accept=".pdf"
-                    onChange={onFileChange}
-                  />
-                </label>
+                <div className="flex flex-col space-y-3">
+                  <label className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 cursor-pointer inline-block">
+                    Select File
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.html,.htm"
+                      onChange={onFileChange}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* HTML Content Display */}
+          {isHtmlContent && (
+            <div className="h-full flex flex-col">
+              <div className="bg-gray-800 p-3 flex items-center justify-between">
+                <div className="flex items-center">
+                  <h2 className="text-white font-medium truncate">
+                    {contentTitle}
+                  </h2>
+                  {contentUrl && (
+                    <a
+                      href={contentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-3 text-blue-400 hover:text-blue-300 text-sm"
+                    >
+                      Visit Original
+                    </a>
+                  )}
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => {
+                      setIsHtmlContent(false);
+                      setHtmlContent("");
+                      setContentTitle("");
+                      setContentUrl("");
+                      setContentSource(null);
+                    }}
+                    className="text-gray-400 hover:text-white p-1"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-auto bg-white">
+                <iframe
+                  srcDoc={htmlContent}
+                  className="w-full h-full border-none"
+                  title={contentTitle}
+                  sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                />
               </div>
             </div>
           )}
@@ -976,6 +1155,28 @@ export default function ReadIt() {
             isSidebarOpen ? "translate-x-0" : "translate-x-full"
           }`}
         >
+          {/* URL Input */}
+          <div className="mb-4">
+            <h3 className="text-sm font-medium text-gray-300 mb-2">
+              Load from URL
+            </h3>
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                placeholder="Enter URL"
+                className="w-full bg-gray-700 text-white px-3 py-2 rounded-md text-sm"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+              />
+              <button
+                onClick={() => handleUrlScrape(urlInput)}
+                disabled={!urlInput || isLoading}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-md text-sm disabled:opacity-50"
+              >
+                Load
+              </button>
+            </div>
+          </div>
           <div className="p-4">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-white">Settings</h2>
@@ -1082,7 +1283,11 @@ export default function ReadIt() {
                         type="password"
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
-                        placeholder="Enter your OpenAI API key"
+                        placeholder={`Enter your ${
+                          selectedProvider === "outspeed"
+                            ? "Outspeed"
+                            : "OpenAI"
+                        } API key`}
                         className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         disabled={isTranscribing}
                       />
@@ -1395,6 +1600,23 @@ export default function ReadIt() {
                   </span>
                 </div>
               </div>
+
+              {/* Provider Selection */}
+              <div className="mt-4">
+                <h4 className="text-white text-sm font-medium mb-2">
+                  Provider
+                </h4>
+                <select
+                  value={selectedProvider}
+                  onChange={(e) =>
+                    setSelectedProvider(e.target.value as "outspeed" | "openai")
+                  }
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="outspeed">Outspeed</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -1485,7 +1707,7 @@ export default function ReadIt() {
         onTranscript={(text) => setVoiceTranscript(text)}
         onResponse={(text) => setVoiceResponse(text)}
         apiKey={useCustomApiKey ? apiKey : undefined}
-        // setIsTalkingActive={setIsTalkingActive}
+        provider={selectedProvider}
         pageContext={{
           currentPage: pageNumber,
           totalPages: numPages || 0,
@@ -1504,6 +1726,9 @@ export default function ReadIt() {
                 }
               : {}),
           },
+          contentSource: contentSource,
+          title: contentTitle,
+          url: contentUrl,
         }}
       />
     </div>

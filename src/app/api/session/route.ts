@@ -1,45 +1,79 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET() {
+export async function POST(req: NextRequest) {
   try {
-    console.log("Creating realtime session with OpenAI API");
+    console.log("Creating realtime session");
 
-    if (!process.env.OPENAI_API_KEY) {
-      console.error("OPENAI_API_KEY is not set in environment variables");
+    const {
+      provider = "outspeed",
+      model,
+      apiKey,
+      instructions,
+    } = await req.json();
+
+    // Determine which API key to use
+    let API_KEY;
+    if (apiKey) {
+      API_KEY = apiKey;
+    } else {
+      API_KEY =
+        provider === "outspeed"
+          ? process.env.OUTSPEED_API_KEY
+          : process.env.OPENAI_API_KEY;
+    }
+
+    if (!API_KEY) {
+      console.error(
+        `${provider.toUpperCase()}_API_KEY is not set in environment variables`
+      );
       return NextResponse.json(
         { error: "API key not configured" },
         { status: 500 }
       );
     }
 
-    // Log the first few characters of the API key to verify it's loaded (safely)
-    // const apiKeyPrefix = process.env.OPENAI_API_KEY.substring(0, 5) + "...";
-    // console.log(`API key loaded (starts with: ${apiKeyPrefix})`);
+    // Determine the API endpoint based on provider
+    const API_ENDPOINT =
+      provider === "outspeed"
+        ? "https://api.outspeed.com/v1/realtime/sessions"
+        : "https://api.openai.com/v1/realtime/sessions";
 
-    const response = await fetch(
-      "https://api.openai.com/v1/realtime/sessions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-          // "OpenAI-Beta": "realtime=v1",
-        },
-        body: JSON.stringify({
-          // model: "gpt-4o-mini-realtime-preview-2024-12-17",
-          model: "gpt-4o-realtime-preview-2024-12-17",
-        }),
-      }
-    );
+    // Default models for each provider
+    const defaultModel =
+      provider === "outspeed"
+        ? "MiniCPM-o-2_6"
+        : "gpt-4o-realtime-preview-2024-12-17";
+
+    // Prepare request body based on provider
+    const requestBody = {
+      model: model || defaultModel,
+      modalities: ["audio", "text"],
+      temperature: 0.6,
+      voice: provider === "outspeed" ? "female" : "sage",
+    };
+
+    // Add instructions for Outspeed if provided
+    if (provider === "outspeed" && instructions) {
+      Object.assign(requestBody, { instructions });
+    }
+
+    const response = await fetch(API_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
 
     console.log("Session API response status:", response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("OpenAI API Error:", response.status, errorText);
+      console.error(`${provider} API Error:`, response.status, errorText);
       return NextResponse.json(
         {
-          error: "OpenAI API Error",
+          error: `${provider} API Error`,
           status: response.status,
           details: errorText,
         },
@@ -49,6 +83,7 @@ export async function GET() {
 
     const data = await response.json();
     console.log("Session created successfully");
+    console.log("Session ID:", data.client_secret?.session_id || data.id);
 
     return NextResponse.json(data);
   } catch (error) {

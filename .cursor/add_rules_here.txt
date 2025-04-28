@@ -1,0 +1,1 @@
+add osme rules under this to use cursor and modify this project.

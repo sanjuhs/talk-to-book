@@ -1,58 +1,102 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {
+export async function POST(request: Request) {
   try {
-    // Get the SDP offer and API key from the request
-    const { sdp, apiKey } = await req.json();
-    
-    // Use provided API key or fall back to environment variable
-    const OPENAI_API_KEY = apiKey || process.env.OPENAI_API_KEY;
-    
-    if (!OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: 'OpenAI API key is required' },
-        { status: 400 }
-      );
-    }
+    const requestData = await request.json();
+    const { provider = "outspeed", sdp, apiKey, model } = requestData;
 
-    if (!sdp) {
-      return NextResponse.json(
-        { error: 'SDP offer is required' },
-        { status: 400 }
-      );
-    }
+    console.log("requestData", requestData);
+    console.log("Apikey is actually ephemeral key", apiKey);
 
-    // Forward the SDP offer to OpenAI
-    const response = await fetch('https://api.openai.com/v1/audio/realtime/sdp', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/sdp',
-        'OpenAI-Beta': 'realtime=v1',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: sdp,
+    console.log("SDP route called:", {
+      provider,
+      hasSDP: !!sdp,
+      sdpLength: sdp?.length || 0,
+      model,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenAI SDP error:', response.status, errorText);
+    if (!sdp) {
+      console.error("No SDP offer provided");
       return NextResponse.json(
-        { error: `SDP error: ${errorText}` },
+        { error: "No SDP offer provided" },
+        { status: 400 }
+      );
+    }
+
+    if (!apiKey) {
+      console.error(`No ${provider} API key provided`);
+      return NextResponse.json(
+        { error: `No ${provider} API key provided` },
+        { status: 400 }
+      );
+    }
+
+    let apiEndpoint;
+    let headers: HeadersInit;
+    let body;
+
+    if (provider === "outspeed") {
+      apiEndpoint = `https://api.outspeed.com/v1/realtime?model=${model}`;
+      console.log("outspeed api endpoint", apiEndpoint);
+      headers = {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      };
+      body = JSON.stringify({ sdp });
+    } else {
+      // OpenAI format
+      apiEndpoint = `https://api.openai.com/v1/realtime?model=${
+        model || "gpt-4o-realtime-preview-2024-12-17"
+      }`;
+      headers = {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/sdp",
+      };
+      body = sdp;
+    }
+
+    console.log(`Calling ${provider} API:`, {
+      endpoint: apiEndpoint,
+      keyLength: apiKey.length,
+    });
+
+    const response = await fetch(apiEndpoint, {
+      method: "POST",
+      headers,
+      body,
+    });
+
+    console.log(`${provider} API response status:`, response.status);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`${provider} API error:`, {
+        status: response.status,
+        error: errText,
+        headers: Object.fromEntries(response.headers.entries()),
+      });
+      return NextResponse.json(
+        { error: `${provider} API error: ${errText}` },
         { status: response.status }
       );
     }
 
-    // Return the SDP answer
     const sdpAnswer = await response.text();
-    return new Response(sdpAnswer, {
+    console.log("Received SDP answer:", {
+      provider,
+      length: sdpAnswer.length,
+      isValidSDP: sdpAnswer.includes("v=0"),
+    });
+
+    return new NextResponse(sdpAnswer, {
       headers: {
-        'Content-Type': 'application/sdp',
+        "Content-Type": "application/sdp",
       },
     });
   } catch (error) {
-    console.error('Error in SDP proxy:', error);
+    console.error("Error in SDP route:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

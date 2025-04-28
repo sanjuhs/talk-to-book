@@ -1,0 +1,1 @@
+add osme rules under this to use windsurf and modify this project.
